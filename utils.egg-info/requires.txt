@@ -1,0 +1,13 @@
+datetime
+pytz
+pandas
+snowflake-connector-python
+google-auth
+google-auth-oauthlib
+google-cloud-core
+numpy
+pickleshare
+matplotlib
+regex
+scikit-learn
+scipy
