@@ -14,10 +14,12 @@ from sklearn import metrics
 from sklearn.metrics import RocCurveDisplay
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import confusion_matrix
+from sklearn.metrics import precision_recall_curve
 
 from sklearn.model_selection import train_test_split
 from sklearn.utils import resample
 
+from numpy import argmax
 
 # from connectors.cloud_storage.cloud_storage import *
 
@@ -136,11 +138,24 @@ def balance_dataset(df, target, minor_ind = 1, minority_pct = 0.5):
 
     return df, df_reg
     
-def evaluate(model, X_test, y_test, transform=None, title="Model", threshold=0.5):
+def evaluate(model, X_test, y_test, transform=None, title="Model"):
     if type(model).__name__ == 'RandomForestClassifier':
-        
+
+        # calculate pr-curve
         y_pred_proba = model.predict_proba(X_test)
         y_pred_proba = [p[1] for p in y_pred_proba]
+        precision, recall, thresholds = precision_recall_curve(y_test, y_pred_proba)
+        
+        # convert to f score
+        fscore = (2 * precision * recall) / (precision + recall)
+
+        # locate the index of the largest f score to find optimal threshold
+        ix = argmax(fscore)
+        threshold = thresholds[ix]
+        print('Best Threshold=%f, F-Score=%.3f' % (threshold, fscore[ix]))
+        plt.clf()
+        plt.plot(thresholds, fscore[:-1])
+        plt.show()
         
         # y_pred = model.predict(X_test)
         y_pred = [1 if p>threshold else 0 for p in y_pred_proba]
@@ -160,6 +175,22 @@ def evaluate(model, X_test, y_test, transform=None, title="Model", threshold=0.5
         # ROC AUC plot
         display = metrics.RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=roc_auc_score, estimator_name='example estimator')
         display.plot()
+        
+        # Histogram of probabilities
+        yt = pd.DataFrame(y_test).reset_index()
+        yt = yt.rename(columns={'target':'actual'})
+        yp = pd.DataFrame(y_pred_proba, columns=['predicted'])
+
+        df_test = yt.merge(yp, left_index=True, right_index=True)
+        v = df_test[df_test['actual'].eq(1)]
+        nv = df_test[df_test['actual'].eq(0)]
+        
+        plt.clf()
+        pred_hist_chart, ax = plt.subplots()
+        plt.hist([v['predicted'], nv['predicted']], bins=10, density=1, histtype='bar', stacked=True, label=df_test['actual'], rwidth=0.75)
+        plt.show()
+        # mlflow.log_figure(pred_hist_chart, 'pred_hist_chart.png')
+        plt.close()
 
         # Summarize results
         line_break = (44 + len(title))*'-'
@@ -167,6 +198,9 @@ def evaluate(model, X_test, y_test, transform=None, title="Model", threshold=0.5
         print(line_break)
         print("--------------------- " + title + " ---------------------")
         print(line_break)
+        print('')
+        print('threshold percent:        {:0.2f}'.format(threshold))
+        print('')
         print('accuracy:        {:0.2f}'.format(accuracy))
         print('precision score: {:0.2f}'.format(precision_score))
         print('recall score:    {:0.2f}'.format(recall_score))
@@ -178,6 +212,8 @@ def evaluate(model, X_test, y_test, transform=None, title="Model", threshold=0.5
         print('')
         
         test_metrics = {
+            'pred_hist_chart': pred_hist_chart,
+            'threshold': threshold,
             'accuracy': accuracy,
             'precision_score': precision_score,
             'recall_score': recall_score,
