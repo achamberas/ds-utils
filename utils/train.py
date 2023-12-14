@@ -139,7 +139,7 @@ def balance_dataset(df, target, minor_ind = 1, minority_pct = 0.5):
     return df, df_reg
     
 def evaluate(model, X_test, y_test, transform=None, title="Model"):
-    if type(model).__name__ == 'RandomForestClassifier':
+    if type(model).__name__ == 'RandomForestClassifier' or type(model).__name__ == 'GradientBoostingClassifier':
 
         # calculate pr-curve
         y_pred_proba = model.predict_proba(X_test)
@@ -224,26 +224,25 @@ def evaluate(model, X_test, y_test, transform=None, title="Model"):
         
     elif type(model).__name__ == 'RandomForestRegressor':
         if transform:
-            test_predictions = eval(transform + "(model.predict(test_features))")
-            y_pred = test_predictions
-            test_labels = eval(transform + "(test_labels)")
+            y_pred = eval(transform + "(model.predict(X_test))")
+            y_test = eval(transform + "(y_test)")
         else:
-            test_predictions = model.predict(test_features)
+            y_pred = model.predict(X_test)
         
-        errors = abs(test_predictions - test_labels)
-        ape = errors / abs(test_labels)
+        errors = abs(y_pred - y_test)
+        ape = errors / abs(y_test)
     
         # sets error = pred - 1 when y test is zero
-        mape = 100 * np.mean(np.where(test_labels.eq(0), test_predictions - 1, ape))
+        mape = 100 * np.mean(np.where(y_test.eq(0), y_pred - 1, ape))
     
         # excludes y test = 0
         mape2 = 100 * np.mean(ape[np.isfinite(ape)])
     
         # weighted abs percent error
-        wape = 100 * np.sum(errors) / np.sum(abs(test_labels))
+        wape = 100 * np.sum(errors) / np.sum(abs(y_test))
     
         accuracy = 100 - wape
-        transformation_bias = 100 * (np.mean(test_labels/test_predictions) - 1)
+        transformation_bias = 100 * (np.mean(y_test/y_pred) - 1)
     
         line_break = (44 + len(title))*'-'
         print('\n')
@@ -251,8 +250,8 @@ def evaluate(model, X_test, y_test, transform=None, title="Model"):
         print("--------------------- " + title + " ---------------------")
         print(line_break)
         print('Model Performance with Transformation', transform)
-        print('Mean Squared Error (MSE): {:0.2f}'.format(metrics.mean_squared_error(test_labels, test_predictions)))
-        print('Root Mean Squared Error (RMSE): {:0.2f}'.format(np.sqrt(metrics.mean_squared_error(test_labels, test_predictions))))
+        print('Mean Squared Error (MSE): {:0.2f}'.format(metrics.mean_squared_error(y_test, y_pred)))
+        print('Root Mean Squared Error (RMSE): {:0.2f}'.format(np.sqrt(metrics.mean_squared_error(y_test, y_pred))))
         print('Mean Absolute Percentage Error (MAPE): {:0.2f}'.format(round(mape, 2)))
         print('Weighted Absolute Percentage Error (WAPE): {:0.2f}'.format(round(wape, 2)))
         print('Average Error: {:0.4f} degrees.'.format(np.mean(errors)))
@@ -262,23 +261,22 @@ def evaluate(model, X_test, y_test, transform=None, title="Model"):
 
         # actual vs predicted
         plt.figure(figsize=(10,8))
-        plt.scatter(test_labels, test_predictions)
-        plt.scatter(test_labels, test_labels)
+        plt.scatter(y_test, y_pred)
+        plt.scatter(y_test, y_test)
         plt.xlabel("Actual")
         plt.ylabel("Predicted")
         plt.show()
         
         test_metrics = {
             'perf_with_trans': transform,
-            'MSE':metrics.mean_squared_error(test_labels, test_predictions),
-            'RMSE':np.sqrt(metrics.mean_squared_error(test_labels, test_predictions)),
+            'MSE':metrics.mean_squared_error(y_test, y_pred),
+            'RMSE':np.sqrt(metrics.mean_squared_error(y_test, y_pred)),
             'MAPE':mape,
             'WAPE':wape,
             'avg_error':np.mean(errors),
             'trans_bias':transformation_bias,
             'accuracy':accuracy
         }
-
     # feature importance
     importances_df = pd.DataFrame({"feature_names" : model.feature_names_in_, "importances" : model.feature_importances_})
     importances_df = importances_df.sort_values(by=['importances'], ascending=False)
