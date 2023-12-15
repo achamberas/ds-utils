@@ -105,7 +105,7 @@ def split_dataset(df_reg, selected_features, target):
 
     X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=123)
 
-    return X_train, X_test, y_train, y_test
+    return X_train, X_test, y_train, y_test, features
 
 def balance_dataset(df, target, minor_ind = 1, minority_pct = 0.5):
 
@@ -283,11 +283,11 @@ def evaluate(model, X_test, y_test, transform=None, title="Model"):
     
     return test_metrics, importances_df, y_pred
     
-def save_model(model, X_test, y_test, features, model_type, filename, period_label=None):
+def save_model(model, X_test, y_test, features, model_type, filename, period_label=None, to_bucket=False):
     # calculate prediction error
     if model_type == 'regression':
-        test_predictions = model.predict(X_test)
-        sum_errs = np.sum(((y_test - test_predictions) / test_predictions) **2)
+        y_pred = model.predict(X_test)
+        sum_errs = np.sum(((y_test - y_pred) / y_pred) **2)
         stdev = np.sqrt(1 / (len(y_test) - 2) * sum_errs)
     else:
         stdev = None
@@ -300,13 +300,14 @@ def save_model(model, X_test, y_test, features, model_type, filename, period_lab
     results['period'] = period_label
 
     filename = filename + '.pkl'
-    modelfile = open(filename,'wb')
+    modelfile = open('models/' + filename,'wb')
     pickle.dump(results,modelfile)
     modelfile.close()
     
-    # save model to Google Storage bucket
-    bucket = GOOGLE_BUCKET
-    path = 'models/' + filename
-    cloud_storage_write(filename, bucket, path)
+    if to_bucket:
+        # save model to Google Storage bucket
+        bucket = GOOGLE_BUCKET
+        path = 'models/' + filename
+        cloud_storage_write(filename, bucket, path)
     
     return 'saved and uploaded'
